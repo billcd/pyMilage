@@ -1,3 +1,9 @@
+main.py
+# test gps_point csv
+gps_points*
+
+.idea
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
