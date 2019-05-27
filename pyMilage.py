@@ -1,62 +1,67 @@
-import csv
+from CsvTools import csv_to_list_of_dicts
 from GpsTools import haversine_distance, LatLngAlt
-from pprint import pprint
 
 
-class TsheetsGpsPoint:
-    fname = None
-    lname = None
+class GpsPoint:
+    """ Object is a single GPS point for a single user. """
     username = None
-    gmt_timestamp = None
-    local_timestamp = None
-    latitude = None
-    longitude = None
-    accuracy_in_meters = None
+    date = None
+    time = None
     lat_lng_alt = None
 
+    def __init__(self, username, date, time, lat_lng_alt):
+        self.username = username
+        self.date = date
+        self.time = time
+        self.lat_lng_alt = lat_lng_alt
 
-def dicts_to_tsheets_gps_points():
-    pass
+    @staticmethod
+    def distance_between_points(points):
+        distance = 0
+        for num, point in enumerate(points):
+            try:
+                distance += haversine_distance(point.lat_lng_alt, points[num + 1].lat_lng_alt)
+            except IndexError:
+                # We've hit the end of the list.
+                pass
+        return distance / 5280
 
-
-def csv_to_list_of_dicts(csv_file):
-    point_list = []
-    with open(csv_file) as f:
-        records = csv.DictReader(f)
-        for row in records:
-            point_list.append(row)
-    return point_list
-
-
-def points_by_user_day(points):
-    sorted_list = []
-    for point in points:
-        date, time = point['local_timestamp'].split()
-        found = False
-        for num, s in enumerate(sorted_list):
-            if s['username'] == point['username'] and s['date'] == date:
-                found = True
-                sorted_list[num]['points'].append({
-                            'time': time,
-                            'latitude': point['latitude'],
-                            'longitude': point['longitude']})
-
-        if not found:
-            sorted_list.append({'username': point['username'], 'date': date, 'points': [{
-                            'time': time,
-                            'latitude': point['latitude'],
-                            'longitude': point['longitude']}, ]
-                    })
-    return sorted_list
+    @staticmethod
+    def tsheets_csv_to_gpspoints(csvfile):
+        points = []
+        for point in csv_to_list_of_dicts(csvfile):
+            date, time = point['local_timestamp'].split()
+            gps_point = GpsPoint(point['username'], date, time, LatLngAlt(float(point['latitude']), float(point['longitude']), 0))
+            points.append(gps_point)
+        return points
 
 
-def get_distance_from_points(points):
-    distance = 0
-    for num, point in enumerate(points):
-        try:
-            origin = LatLngAlt(float(point['latitude']), float(point['longitude']), 0)
-            destination = LatLngAlt(float(points[num+1]['latitude']), float(points[num+1]['longitude']), 0)
-            distance += haversine_distance(origin, destination)
-        except IndexError:
-            pass
-    return distance / 5280
+class GpsUserDayLog:
+    """ Object is a list of GPS points for one day and one user. """
+    username = None
+    date = None
+    gps_points = []
+
+    def __init__(self, username, date, points):
+        self.username = username
+        self.date = date
+        self.gps_points = points
+
+    def get_distance_for_day(self):
+        # make sure the points are sorted by time
+        points = self.gps_points
+        points.sort(key=lambda r: r.time)
+        return GpsPoint.distance_between_points(points)
+
+    @staticmethod
+    def points_to_day_log_list(points):
+        dll = []
+        for gp in points:
+            found = False
+            for num, dl in enumerate(dll):
+                if dl.username == gp.username and dl.date == gp.date:
+                    found = True
+                    dll[num].gps_points.append(gp)
+            if not found:
+                dll.append(GpsUserDayLog(gp.username, gp.date, [gp, ]))
+        return dll
